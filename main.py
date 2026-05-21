@@ -25,7 +25,7 @@ sqlite_url = f"sqlite:///{sqlite_file_name}"
 connect_args = {"check_same_thread": False}
 engine = create_engine(sqlite_url, connect_args=connect_args)
 
-
+vscode-terminal:/b075751b807ebe5db23cf007d39580e7/7
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
