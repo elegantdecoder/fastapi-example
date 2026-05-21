@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Generic, Optional, TypeVar
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlmodel import Field, SQLModel, Session, create_engine, func, select
+from sqlmodel import Field, SQLModel, Session, create_engine, select
 
 
 class Campaign(SQLModel, table=True):
@@ -70,17 +70,16 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 #creating methods with database
 @app.get("/campaigns", response_model=PaginatedResponse[list[Campaign]])
-async def read_campaign(request: Request, session: SessionDep, page: int = Query(1, ge=1), page_size: int = Query(20, ge=1)): # type: ignore
-    limit = page_size #type: ignore
-    offset = (page-1) * limit # type: ignore
+async def read_campaign(request: Request, session: SessionDep, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1)): # type: ignore
+    
     data = session.exec(select(Campaign).order_by(Campaign.campaign_id).offset(offset).limit(limit)).all() #type: ignore
 
     base_url = str(request.url).split('?')[0] # type: ignore
 
-    next_url = f"{base_url}?page={page+1}&page_size={limit}"
+    next_url = f"{base_url}?offset={offset+limit}&limit={limit}"
 
-    if page > 1:
-        prev_url = f"{base_url}?page={page-1}&page_size={limit}"
+    if offset > 0 :
+        prev_url = f"{base_url}?offset={max(0, offset-limit)}&limit={limit}"
     else:
         prev_url = None
          
