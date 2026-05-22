@@ -1,15 +1,17 @@
 #in this API creation, we have first created methods without any database but the mock data, now after that we connected the database and then moved on created the methods again 
 
+import base64
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Annotated, Generic, TypeVar
-from fastapi import Depends, FastAPI, HTTPException
+import json
+from typing import Annotated, Generic, Optional, TypeVar
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlmodel import Field, SQLModel, Session, create_engine, select
 
 
 class Campaign(SQLModel, table=True):
-    campaign_id: int | None = Field(default=None, primary_key=True)
+    campaign_id: int = Field(default=None, primary_key=True)
     name: str = Field(index=True)
     due_date: datetime | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
@@ -25,7 +27,7 @@ sqlite_url = f"sqlite:///{sqlite_file_name}"
 connect_args = {"check_same_thread": False}
 engine = create_engine(sqlite_url, connect_args=connect_args)
 
-vscode-terminal:/b075751b807ebe5db23cf007d39580e7/7
+
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
@@ -52,8 +54,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(root_path="/api/v1", lifespan=lifespan)
 
-
-# we created this with data and not database
 @app.get("/")
 async def root():
     return {"message": "Hello World!"}
@@ -62,11 +62,44 @@ T = TypeVar("T")
 class Response(BaseModel, Generic[T]):
     data: T
 
+class PaginatedResponse(BaseModel, Generic[T]):
+    data: T
+    next: Optional[str]
+    #prev: Optional[str]
+    
+def encode_cursor(value): # type: ignore
+    raw = json.dumps({"id": value}) # type: ignore
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+def decode_cursor(cursor): # type: ignore
+    raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+    payload = json.loads(raw)
+    return payload.get("id")
+    
 #creating methods with database
-@app.get("/campaigns", response_model=Response[list[Campaign]])
-async def read_campaign(session: SessionDep):
-    data = session.exec(select(Campaign)).all()
-    return {"data": data}
+@app.get("/campaigns", response_model=PaginatedResponse[list[Campaign]])
+async def read_campaigns(request: Request, session: SessionDep, cursor: Optional[str], limit: int = Query(20, ge=1)): # type: ignore
+    cursor_id = 0
+
+    if cursor:
+        cursor_id = decode_cursor(cursor)
+
+    data = session.exec(select(Campaign).order_by(Campaign.campaign_id).where(Campaign.campaign_id > cursor_id).limit(limit)).all() # type: ignore
+
+    base_url = str(request.url).split('?')[0]
+
+    next_url = None
+    if len(data) > limit:
+        next_cursor = encode_cursor(data[:limit][-1].campaign_id)
+        next_url = f"{base_url}?cursor={next_cursor}&limit={limit}"
+
+
+    #print(base_url)
+    return {
+        "next": next_url,
+        #"prev": prev_url,
+        "data": data[:limit]
+    } # type: ignore
 
 @app.get("/campaign/{id}", response_model=Response[Campaign])
 async def read_campaign(id: int, session: SessionDep):
