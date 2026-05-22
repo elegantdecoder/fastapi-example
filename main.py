@@ -72,7 +72,7 @@ def encode_cursor(value): # type: ignore
     return base64.urlsafe_b64encode(raw.encode()).decode()
 
 def decode_cursor(cursor): # type: ignore
-    raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+    raw = base64.urlsafe_b64decode(cursor.encode()).decode() # type: ignore
     payload = json.loads(raw)
     return payload.get("id")
     
